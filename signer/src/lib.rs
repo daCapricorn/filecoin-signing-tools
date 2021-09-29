@@ -1296,3 +1296,57 @@ pub fn get_cid(message_api: MessageTxAPI) -> Result<String, SignerError> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::ops::Range;
+    use forest_bitfield::{BitField, UnvalidatedBitField};
+    use forest_bitfield::iter::{Ranges, RangeIterator};
+    use extras::{miner::CompactSectorNumbersParams};
+    use crate::CborBuffer;
+
+    fn ranges(slice: &[Range<usize>]) -> impl RangeIterator + '_ {
+        Ranges::new(slice.iter().cloned())
+    }
+
+    #[test]
+    fn serialize_compact_sector_numbers_params() {
+        let params = "100052-100053,100066,100070,100074,100148,100171,100300-100378,100380-100418,100425,100435,100523,100630,100632,100634,100941,100975,101066,101084,101092,101108,101112-101113,101118,101120,101122,101126,101131,101216,101220-101221,101223,101227,101284,101322,101324-101325,101380,101408,101437,101462,101572,101575,101638,101647,101664,101672,101684,101799,101970,101974,102006,102013,102106,102149,102259,102262,102298,102309,102451,102453,102489,102755,103784-103785,104078,104924,105265-105266,105482,105726,106363,107177,107187-107188,107212,107219,107296,107309,107316,107354-107356,107484,107495,107502,107524,107526,107528-107530,107555,107570,107650,107656-107659,107669,107677-107680,107699-107700,107702-107703,107721,107733,107806-107809,107816,107830,107887,107891,107893-107896,107918,107951,107993-107997,108034,108046,108049,108069-108070,108090-108092,108094,108126,108161,108182,108185,108202-108205,108232,108270,108280,108307-108309,108311-108312,108326,108329,108331,108340,108348,108382,108408,108454,108465,108476-108479,108481,108493,108501,108548,108607-108608,108639,108641-108643,108658,108665,108725,108747,108765,108800,108802-108804,108896,108916,108952-108954,108956-108958,108970,109096-109101,109109,109126,109209-109211,109311-109312,109318-109321,109323-109342,109344,109348-109353,109371-109372,109386,109398,109412,109433-109434,109448-109450,109453,109461,109467,109472,109483-109484,109496,110055-110056,112136,112196,112198-112199,112206,112310,112333,112409,112556,112591,112652,112654,112681,112688,112700,112729,112736,112763,112789-112791,112805,112808,112830,112835,112889,112893,112913,112925-112928,112941,112949-112950,112952,113018,113026,113032,113036,113044,113057,113064-113065,113067-113069,113094,113111,113133,113153,113172-113176,113186,113254,113266,113286,113288-113290,113300,113306,113314,113349,113377,113379,113381-113384,113503,113812,115891,117614,120206,121245,125353,127051,129742,129757,131065,131144,132186,134129,134334,137693,137701,137713,138472,139218,140634,141260,141410,141452,141473,141588,142431-142432,142684,142686,142789,142798,142808,142810-142811,143581,143962,143970,144004,144256,144342,144354,144395,144582,144612,144966,145030,145618,145873,146377,146389,146723,146745,146851,146854,146900,146965,146993,146995-147000,147134,148165,148679-148680,148730-148731,149459,149732,149737,149913,149966,149985";
+        let params_decode = base64::decode("gVkBkYC60UCRO50kxSKAATzlRGvmKmofWYGERCsRvX5Hkb5TClVH2QlOSlawyUY4gpG2SnyKgeh1IxfVgE4+auGKStoqGammMeCMJFEghAgKpAJpNgi1gMJ1QOYDwk+QVoOmwkUtTOVaShz+qrVUvANGPU8tyexJSCgVIrpBkrR2cDpLVAQkKRYk3UomFCac+YhIKCqBkNBISTMaTsWuXOwlJBlpqVal3V5coqPgsaPXspOKRERkh61MZMTpuOnTvEBEymFMsaRQ7GhEKHa3HQrFdpReq1RV3LgSKHxCZGdFy1ksshTJgIiE52jUuuGoRSMZjl1JRSk1nUx0JbmnTFCv1emVa0oHjECkIhORsMwMdTOxY7Z6EcnGS9iFViCeENFtyCdFHBGyCJLQhghW1LOpEKdEIsTyIcwB8dTodWNfkPSCHC4kniCVAUkJReSibKCwH3DMis0VAg3CL9BLSPYDUtUNSnQD0pFwgfxkmSD+Abkf6KZZIBVJq6QlQNlYozAghggJJFCIUbguCKRAKa8BoYlE").unwrap();
+
+        let mut range_vec: Vec<Range<usize>> = Vec::new();
+        let mut num_vec: Vec<usize> = Vec::new();
+        for param in params.split(",") {
+            if param.contains("-") {
+                let range: Vec<&str> = param.split("-").collect();
+                let range: Vec<usize> = range.iter().map(|p| p.parse::<usize>().unwrap()).collect();
+                let range: Range<usize> = Range { start: range.first().unwrap().clone(), end: range.last().unwrap().clone() + 1 };
+                range_vec.push(range);
+            } else {
+                num_vec.push(param.parse::<usize>().unwrap())
+            }
+        }
+
+        let mut bf = BitField::from_ranges(ranges(&range_vec));
+        for num in num_vec.iter() {
+            bf.set(num.clone());
+        }
+
+        let bytes = bf.to_bytes();
+        println!("==================================={:?}", params_decode);
+
+        let bf = BitField::from_bytes(&bytes).unwrap();
+        let params = CompactSectorNumbersParams { mask_sector_numbers: UnvalidatedBitField::Validated(bf) };
+
+        let serialized_params = forest_vm::Serialized::serialize::<CompactSectorNumbersParams>(params).unwrap();
+        let serialized_params = serialized_params.bytes().to_vec();
+        println!("==================================={:?}", &serialized_params);
+
+        let message_cbor = CborBuffer(serialized_params.clone());
+        let serialized = base64::encode(message_cbor);
+
+        println!("==================================={:?}", serialized);
+        assert_eq!(base64::encode(params_decode.clone()), serialized);
+        assert_eq!(serialized_params, params_decode);
+    }
+}
