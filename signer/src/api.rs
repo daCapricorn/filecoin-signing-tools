@@ -9,7 +9,7 @@ use forest_vm::Serialized;
 use num_bigint_chainsafe::BigInt;
 use serde::{Deserialize, Serialize, Serializer};
 
-use extras::{multisig, paych, ExecParams};
+use extras::{multisig, paych, storageminer, ExecParams};
 
 use crate::error::SignerError;
 use crate::signature::Signature;
@@ -426,6 +426,34 @@ impl Into<LockBalanceMultisigParams> for multisig::LockBalanceParams {
     }
 }
 
+#[cfg_attr(feature = "with-arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WithdrawBalanceMinerParams {
+    #[serde(alias = "AmountRequested")]
+    pub amount: String,
+}
+
+impl TryFrom<WithdrawBalanceMinerParams> for storageminer::WithdrawBalanceParams {
+    type Error = SignerError;
+
+    fn try_from(
+        params: WithdrawBalanceMinerParams,
+    ) -> Result<storageminer::WithdrawBalanceParams, Self::Error> {
+        Ok(storageminer::WithdrawBalanceParams {
+            amount: BigInt::from_str(&params.amount)?,
+        })
+    }
+}
+
+impl Into<WithdrawBalanceMinerParams> for storageminer::WithdrawBalanceParams {
+    fn into(self) -> WithdrawBalanceMinerParams {
+        WithdrawBalanceMinerParams {
+            amount: self.amount.to_str_radix(10),
+        }
+    }
+}
+
 /// Payment channel create params
 #[cfg_attr(feature = "with-arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -543,6 +571,7 @@ pub enum MessageParams {
     PaymentChannelCreateParams(PaymentChannelCreateParams),
     PaymentChannelUpdateStateParams(PaymentChannelUpdateStateParams),
     LockBalanceMultisigParams(LockBalanceMultisigParams),
+    WithdrawBalanceMinerParams(WithdrawBalanceMinerParams),
 }
 
 impl MessageParams {
@@ -629,6 +658,12 @@ impl MessageParams {
                 let params = multisig::LockBalanceParams::try_from(multisig_lock_balance)?;
 
                 forest_vm::Serialized::serialize::<multisig::LockBalanceParams>(params)
+                    .map_err(|err| SignerError::GenericString(err.to_string()))?
+            }
+            MessageParams::WithdrawBalanceMinerParams(miner_withdraw_balance) => {
+                let params = storageminer::WithdrawBalanceParams::try_from(miner_withdraw_balance)?;
+
+                forest_vm::Serialized::serialize::<storageminer::WithdrawBalanceParams>(params)
                     .map_err(|err| SignerError::GenericString(err.to_string()))?
             }
         };

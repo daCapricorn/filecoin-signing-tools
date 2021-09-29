@@ -20,7 +20,7 @@ use secp256k1::util::{
 use secp256k1::{recover, sign, verify, Message, RecoveryId};
 use zx_bip44::BIP44Path;
 
-use extras::{multisig, paych, ExecParams, MethodInit, INIT_ACTOR_ADDR};
+use extras::{multisig, paych, storageminer, ExecParams, MethodInit, INIT_ACTOR_ADDR};
 
 use crate::api::{
     MessageParams, MessageTx, MessageTxAPI, MessageTxNetwork, SignatureAPI, SignedMessageAPI,
@@ -1082,6 +1082,19 @@ pub fn deserialize_params(
     let serialized_params = forest_vm::Serialized::new(params_decode);
 
     match actor_type.as_str() {
+        "fil/2/storageminer" | "fil/3/storageminer" | "fil/4/storageminer" | "fil/5/storageminer" => {
+            match FromPrimitive::from_u64(method) {
+                Some(storageminer::MethodStorageMiner::WithdrawBalance) => {
+                    let params = serialized_params.deserialize::<storageminer::WithdrawBalanceParams>()?;
+
+                    Ok(MessageParams::WithdrawBalanceMinerParams(params.into()))
+                }
+                _ => Err(SignerError::GenericString(
+                    "Unknown method for actor 'fil/2/storageminer', 'fil/3/storageminer', 'fil/4/storageminer' or 'fil/5/storageminer' ."
+                        .to_string(),
+                )),
+            }
+        }
         "fil/1/init" | "fil/2/init" | "fil/3/init" | "fil/4/init" | "fil/5/init" => {
             match FromPrimitive::from_u64(method) {
                 Some(MethodInit::Exec) => {

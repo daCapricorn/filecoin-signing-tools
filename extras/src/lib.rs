@@ -1,5 +1,6 @@
 pub mod multisig;
 pub mod paych;
+pub mod storageminer;
 
 use forest_address::Address;
 use forest_cid::Cid;
