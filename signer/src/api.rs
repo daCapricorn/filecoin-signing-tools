@@ -9,7 +9,7 @@ use forest_vm::Serialized;
 use num_bigint_chainsafe::BigInt;
 use serde::{Deserialize, Serialize, Serializer};
 
-use extras::{multisig, paych, storageminer, ExecParams};
+use extras::{multisig, paych, miner, ExecParams};
 
 use crate::error::SignerError;
 use crate::signature::Signature;
@@ -434,19 +434,19 @@ pub struct WithdrawBalanceMinerParams {
     pub amount: String,
 }
 
-impl TryFrom<WithdrawBalanceMinerParams> for storageminer::WithdrawBalanceParams {
+impl TryFrom<WithdrawBalanceMinerParams> for miner::WithdrawBalanceParams {
     type Error = SignerError;
 
     fn try_from(
         params: WithdrawBalanceMinerParams,
-    ) -> Result<storageminer::WithdrawBalanceParams, Self::Error> {
-        Ok(storageminer::WithdrawBalanceParams {
+    ) -> Result<miner::WithdrawBalanceParams, Self::Error> {
+        Ok(miner::WithdrawBalanceParams {
             amount: BigInt::from_str(&params.amount)?,
         })
     }
 }
 
-impl Into<WithdrawBalanceMinerParams> for storageminer::WithdrawBalanceParams {
+impl Into<WithdrawBalanceMinerParams> for miner::WithdrawBalanceParams {
     fn into(self) -> WithdrawBalanceMinerParams {
         WithdrawBalanceMinerParams {
             amount: self.amount.to_str_radix(10),
@@ -661,9 +661,9 @@ impl MessageParams {
                     .map_err(|err| SignerError::GenericString(err.to_string()))?
             }
             MessageParams::WithdrawBalanceMinerParams(miner_withdraw_balance) => {
-                let params = storageminer::WithdrawBalanceParams::try_from(miner_withdraw_balance)?;
+                let params = miner::WithdrawBalanceParams::try_from(miner_withdraw_balance)?;
 
-                forest_vm::Serialized::serialize::<storageminer::WithdrawBalanceParams>(params)
+                forest_vm::Serialized::serialize::<miner::WithdrawBalanceParams>(params)
                     .map_err(|err| SignerError::GenericString(err.to_string()))?
             }
         };
