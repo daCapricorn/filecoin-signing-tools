@@ -8,13 +8,12 @@ use serde::{Serialize, Deserialize};
 
 #[derive(Serialize_tuple, Deserialize_tuple)]
 pub struct WithdrawBalanceParams {
-    #[serde(alias = "AmountRequested", with = "bigint_ser")]
+    #[serde(with = "bigint_ser")]
     pub amount: TokenAmount,
 }
 
 #[derive(Serialize_tuple, Deserialize_tuple)]
 pub struct CompactSectorNumbersParams {
-    #[serde(alias = "MaskSectorNumber")]
     pub mask_sector_numbers: UnvalidatedBitField,
 }
 
