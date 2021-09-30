@@ -1,15 +1,18 @@
 use std::convert::{TryFrom, TryInto};
+use std::ops::Range;
 use std::str::FromStr;
 
 use forest_address::{Address, Network};
-use forest_cid::{multihash::MultihashDigest, Cid, Code::Identity};
+use forest_cid::{Cid, Code::Identity, multihash::MultihashDigest};
 use forest_crypto::signature;
 use forest_message::{Message, SignedMessage, UnsignedMessage};
 use forest_vm::Serialized;
 use num_bigint_chainsafe::BigInt;
 use serde::{Deserialize, Serialize, Serializer};
 
-use extras::{multisig, paych, miner, ExecParams};
+use extras::{ExecParams, miner, multisig, paych};
+use forest_bitfield::{BitField, iter::Ranges, UnvalidatedBitField};
+use forest_bitfield::iter::RangeIterator;
 
 use crate::error::SignerError;
 use crate::signature::Signature;
@@ -454,6 +457,80 @@ impl Into<WithdrawBalanceMinerParams> for miner::WithdrawBalanceParams {
     }
 }
 
+#[cfg_attr(feature = "with-arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CompactSectorNumbersMinerParams {
+    #[serde(alias = "MaskSectorNumber")]
+    pub mask_sector_numbers: String,
+}
+
+fn ranges(slice: &[Range<usize>]) -> impl RangeIterator + '_ {
+    Ranges::new(slice.iter().cloned())
+}
+
+impl TryFrom<CompactSectorNumbersMinerParams> for miner::CompactSectorNumbersParams {
+    type Error = SignerError;
+
+    fn try_from(
+        params: CompactSectorNumbersMinerParams,
+    ) -> Result<miner::CompactSectorNumbersParams, Self::Error> {
+        let mut range_vec: Vec<Range<usize>> = Vec::new();
+        let mut num_vec: Vec<usize> = Vec::new();
+        for param in params.mask_sector_numbers.split(',') {
+            if param.contains('-') {
+                let range: Vec<&str> = param.split('-').collect();
+                let range: Vec<usize> = range.iter().map(|p| p.parse::<usize>().unwrap()).collect();
+                let range: Range<usize> = Range { start: range.first().unwrap().clone(), end: range.last().unwrap().clone() + 1 };
+                range_vec.push(range);
+            } else {
+                num_vec.push(param.parse::<usize>().unwrap())
+            }
+        }
+
+        let mut bf = BitField::from_ranges(ranges(&range_vec));
+        for num in num_vec.iter() {
+            bf.set(num.clone());
+        }
+
+        let result = miner::CompactSectorNumbersParams { mask_sector_numbers: UnvalidatedBitField::Validated(bf) };
+
+        Ok(result)
+    }
+}
+
+impl Into<CompactSectorNumbersMinerParams> for miner::CompactSectorNumbersParams {
+    fn into(self) -> CompactSectorNumbersMinerParams {
+        let bf = match self.mask_sector_numbers {
+            UnvalidatedBitField::Validated(p) => {
+                p
+            }
+            UnvalidatedBitField::Unvalidated(bytes) => {
+                BitField::from_bytes(&bytes).unwrap()
+            }
+        };
+
+        let mut sector_numbers: Vec<String> = Vec::new();
+
+        let ranges = bf.ranges();
+        for range in ranges {
+            let start = range.start;
+            let end = range.end - 1;
+
+            if start == end {
+                sector_numbers.push(format!("{}", range.start))
+            } else {
+                sector_numbers.push(format!("{}-{}", range.start, range.end - 1))
+            }
+        }
+        let mask_sector_numbers = sector_numbers.join(&','.to_string());
+
+        CompactSectorNumbersMinerParams {
+            mask_sector_numbers,
+        }
+    }
+}
+
 /// Payment channel create params
 #[cfg_attr(feature = "with-arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -572,6 +649,7 @@ pub enum MessageParams {
     PaymentChannelUpdateStateParams(PaymentChannelUpdateStateParams),
     LockBalanceMultisigParams(LockBalanceMultisigParams),
     WithdrawBalanceMinerParams(WithdrawBalanceMinerParams),
+    CompactSectorNumbersMinerParams(CompactSectorNumbersMinerParams),
 }
 
 impl MessageParams {
@@ -664,6 +742,12 @@ impl MessageParams {
                 let params = miner::WithdrawBalanceParams::try_from(miner_withdraw_balance)?;
 
                 forest_vm::Serialized::serialize::<miner::WithdrawBalanceParams>(params)
+                    .map_err(|err| SignerError::GenericString(err.to_string()))?
+            }
+            MessageParams::CompactSectorNumbersMinerParams(mask_sector_numbers) => {
+                let params = miner::CompactSectorNumbersParams::try_from(mask_sector_numbers)?;
+
+                forest_vm::Serialized::serialize::<miner::CompactSectorNumbersParams>(params)
                     .map_err(|err| SignerError::GenericString(err.to_string()))?
             }
         };

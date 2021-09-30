@@ -1089,6 +1089,11 @@ pub fn deserialize_params(
 
                     Ok(MessageParams::WithdrawBalanceMinerParams(params.into()))
                 }
+                Some(miner::MethodStorageMiner::CompactSectorNumbers) => {
+                    let params = serialized_params.deserialize::<miner::CompactSectorNumbersParams>()?;
+
+                    Ok(MessageParams::CompactSectorNumbersMinerParams(params.into()))
+                }
                 _ => Err(SignerError::GenericString(
                     "Unknown method for actor 'fil/2/storageminer', 'fil/3/storageminer', 'fil/4/storageminer' or 'fil/5/storageminer' ."
                         .to_string(),
@@ -1336,6 +1341,21 @@ mod tests {
         println!("==================================={:?}", params_decode);
 
         let bf = BitField::from_bytes(&bytes).unwrap();
+        let mut sector_numbers: Vec<String> = Vec::new();
+
+        let ranges = bf.ranges();
+        for range in ranges {
+            let start = range.start;
+            let end = range.end - 1;
+
+            if start == end {
+                sector_numbers.push(format!("{}", range.start))
+            } else {
+                sector_numbers.push(format!("{}-{}", range.start, range.end - 1))
+            }
+        }
+        let mask_sector_numbers = sector_numbers.join(&','.to_string());
+        println!("==================================={:?}", mask_sector_numbers);
         let params = CompactSectorNumbersParams { mask_sector_numbers: UnvalidatedBitField::Validated(bf) };
 
         let serialized_params = forest_vm::Serialized::serialize::<CompactSectorNumbersParams>(params).unwrap();
