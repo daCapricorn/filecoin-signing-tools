@@ -1094,6 +1094,13 @@ pub fn deserialize_params(
 
                     Ok(MessageParams::CompactSectorNumbersMinerParams(params.into()))
                 }
+                Some(miner::MethodStorageMiner::ChangeOwnerAddress) => {
+                    let params = serialized_params.deserialize::<miner::ChangeOwnerAddressParams>()?;
+
+                    let mut address = params.0;
+                    address.set_network(Network::Mainnet);
+                    Ok(MessageParams::MessageParamsSerialized(address.to_string()))
+                }
                 _ => Err(SignerError::GenericString(
                     "Unknown method for actor 'fil/2/storageminer', 'fil/3/storageminer', 'fil/4/storageminer' or 'fil/5/storageminer' ."
                         .to_string(),
